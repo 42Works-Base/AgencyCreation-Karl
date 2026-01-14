@@ -163,7 +163,7 @@
         </div>
         @endif
 
-        <form method="POST" action="{{ route('agencies.store') }}">
+        <form id="agency-form" method="POST" action="{{ route('agencies.store') }}">
             @csrf
 
             {{-- Agency Name --}}
@@ -242,6 +242,35 @@
             <a href="{{ url('/agencies') }}">← Back to agency list</a>
         </div>
     </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('agency-form');
+    if (!form) return;
+
+    const submitBtn = form.querySelector('button[type="submit"]');
+
+    form.addEventListener('submit', function (e) {
+        if (submitBtn.disabled) {
+            e.preventDefault();
+            return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.dataset.oldText = submitBtn.innerHTML;
+        submitBtn.innerHTML = 'Saving...';
+    });
+
+    window.addEventListener('pageshow', function () {
+        submitBtn.disabled = false;
+        if (submitBtn.dataset.oldText) {
+            submitBtn.innerHTML = submitBtn.dataset.oldText;
+        }
+    });
+});
+</script>
+
+
 
 </body>
 
