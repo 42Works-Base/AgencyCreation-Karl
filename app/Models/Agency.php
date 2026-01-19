@@ -16,4 +16,9 @@ class Agency extends Model
         'background_image_path',
         'skin_color',
     ];
+
+    public function workers()
+    {
+        return $this->hasMany(Worker::class);
+    }
 }
