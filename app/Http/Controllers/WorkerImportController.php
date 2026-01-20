@@ -222,10 +222,50 @@ class WorkerImportController extends Controller
     /**
      * Download sample CSV
      */
+    // public function downloadSample()
+    // {
+    //     return response()->download(public_path('sample.csv'), 'sample.csv');
+    // }
+
     public function downloadSample()
-    {
-        return response()->download(public_path('sample.csv'), 'sample.csv');
-    }
+{
+    $headers = [
+        'Content-Type' => 'text/csv',
+        'Content-Disposition' => 'attachment; filename="sample.csv"',
+        'Pragma' => 'no-cache',
+        'Expires' => '0',
+    ];
+
+    $callback = function () {
+        $handle = fopen('php://output', 'w');
+
+        // Write header row
+        fputcsv($handle, [
+            'Surname','Forename','Title','Address1','Address2','City','County','PostCode','Country',
+            'Date of Birth','Mobile Phone','Home Phone','Email Address','NI Number','Account No','SortCode',
+            'BS Ref','Nationality','Job Title','EndClient','Sharecode','ExternalId','Signify','Venatu',
+            'Bank Name','Branch','StartDate'
+        ]);
+
+        // Write example rows
+        fputcsv($handle, [
+            'Bloggs','Joe','Mr','15 My Street','MyTown','My City','MyCounty','AB12 3CD','UK',
+            '01/01/1980','12345678900','','myname@myemail.com','AB123456C','45674567','202621',
+            '','Romania','Production Operative','Tesco','','1','GLAA','','Bank Name','',''
+        ]);
+
+        fputcsv($handle, [
+            'Baggins','Bilbo','Mr','20 My Street','YourTown','My City','MyCounty','EF45 6GH','UK',
+            '01/01/1980','12345678901','','myname@mysemail.com','AB123456CB','12341234','202621',
+            '','Albania','Warehouse Operative','Tesco','','2','Non-GLAA','','Bank Name','',''
+        ]);
+
+        fclose($handle);
+    };
+
+    return response()->stream($callback, 200, $headers);
+}
+
 
     /**
      * Date parser
