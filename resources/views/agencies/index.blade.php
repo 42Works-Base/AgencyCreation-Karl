@@ -116,8 +116,20 @@
 
         <div class="top-bar">
             <h2>Agency Inbox</h2>
-            <a href="{{ route('agencies.create') }}" class="btn btn-submit">+ Create Agency</a>
+
+            <div style="display:flex; gap:10px;">
+                <!-- 👥 Go to Worker Inbox -->
+                <a href="{{ route('workers.index') }}" class="btn" style="background:#059669; color:white;">
+                    👥 Worker Inbox
+                </a>
+
+                <!-- ➕ Create Agency -->
+                <a href="{{ route('agencies.create') }}" class="btn btn-submit">
+                    + Create Agency
+                </a>
+            </div>
         </div>
+
 
         {{-- ✅ Success Flash --}}
         @if (session('success'))

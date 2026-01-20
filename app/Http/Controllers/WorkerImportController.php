@@ -6,6 +6,8 @@ use App\Models\Agency;
 use App\Models\Worker;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rules\Email;
 use Carbon\Carbon;
 
 class WorkerImportController extends Controller
@@ -58,15 +60,13 @@ class WorkerImportController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'agency_id' => 'required|exists:agencies,id',
-            'csv_file'  => 'required|file|mimes:csv,txt',
+            'agency_id' => ['required', 'exists:agencies,id'],
+            'csv_file'  => ['required', 'file', 'mimes:csv,txt'],
         ]);
 
         $file = fopen($request->file('csv_file')->getRealPath(), 'r');
 
-        /** ---------------------------------
-         *  HEADER VALIDATION
-         * --------------------------------*/
+        /* ---------------- HEADER VALIDATION ---------------- */
         $header = fgetcsv($file);
 
         if ($header !== $this->expectedHeaders) {
@@ -75,32 +75,25 @@ class WorkerImportController extends Controller
             ]);
         }
 
-        /** ---------------------------------
-         *  ARRAYS FOR DUPLICATE CHECK
-         * --------------------------------*/
         $rows   = [];
         $emails = [];
         $phones = [];
         $nis    = [];
 
-        $rowNumber = 1; // Header already read
+        $rowNumber = 1;
 
-        /** ---------------------------------
-         *  READ CSV ROWS
-         * --------------------------------*/
+        /* ---------------- READ CSV ---------------- */
         while (($data = fgetcsv($file)) !== false) {
-
             $rowNumber++;
-
-            /** Normalize & required field validation */
-
-            $rawMobilePhone = trim($data[10] ?? '');
-            $rawHomePhone   = trim($data[11] ?? '');
 
             $forename = trim($data[1] ?? '');
             $email    = strtolower(trim($data[12] ?? ''));
             $ni       = strtoupper(trim($data[13] ?? ''));
 
+            $rawMobilePhone = trim($data[10] ?? '');
+            $rawHomePhone   = trim($data[11] ?? '');
+
+            /* -------- Required fields -------- */
             if ($forename === '') {
                 return back()->withErrors([
                     'csv_file' => "Forename is required at row {$rowNumber}"
@@ -113,46 +106,25 @@ class WorkerImportController extends Controller
                 ]);
             }
 
-            // if (!ctype_digit($rawMobilePhone)) {
-            //     return back()->withErrors([
-            //         'csv_file' => "Mobile Phone must contain only numbers at row {$rowNumber}"
-            //     ]);
-            // }
-
-            // if (strlen($rawMobilePhone) > 20) {
-            //     return back()->withErrors([
-            //         'csv_file' => "Mobile Phone must be between 1 and 20 digits at row {$rowNumber}"
-            //     ]);
-            // }
-
-            // if ($rawHomePhone !== '') {
-
-            //     if (!ctype_digit($rawHomePhone)) {
-            //         return back()->withErrors([
-            //             'csv_file' => "Home Phone must contain only numbers at row {$rowNumber}"
-            //         ]);
-            //     }
-
-            //     if (strlen($rawHomePhone) > 20) {
-            //         return back()->withErrors([
-            //             'csv_file' => "Home Phone must be between 1 and 20 digits at row {$rowNumber}"
-            //         ]);
-            //     }
-            // }
-
-            if ($email === '') {
-                return back()->withErrors([
-                    'csv_file' => "Email Address is required at row {$rowNumber}"
-                ]);
-            }
-
             if ($ni === '') {
                 return back()->withErrors([
                     'csv_file' => "NI Number is required at row {$rowNumber}"
                 ]);
             }
 
-            /** Digits only + length validation */
+            /* -------- Email validation (Laravel 12) -------- */
+            $emailValidator = Validator::make(
+                ['email' => $email],
+                ['email' => ['required', 'email', 'regex:/^[^@\s]+@[^@\s]+\.[^@\s]+$/']]
+            );
+
+            if ($emailValidator->fails()) {
+                return back()->withErrors([
+                    'csv_file' => "Invalid email format at row {$rowNumber}"
+                ]);
+            }
+
+            /* -------- Phone validation -------- */
             if (!ctype_digit($rawMobilePhone) || strlen($rawMobilePhone) > 20) {
                 return back()->withErrors([
                     'csv_file' => "Mobile Phone must contain only digits and max 20 digits at row {$rowNumber}"
@@ -165,18 +137,14 @@ class WorkerImportController extends Controller
                 ]);
             }
 
-            /** Final normalized values */
-            $phone = $rawMobilePhone;
+            $phone     = $rawMobilePhone;
             $homePhone = $rawHomePhone ?: null;
 
-
-            /** ---------------------------------
-             *  CSV INTERNAL DUPLICATE CHECK
-             * --------------------------------*/
+            /* -------- Internal CSV duplicate check -------- */
             if (
-                in_array($email, $emails) ||
-                in_array($phone, $phones) ||
-                in_array($ni, $nis)
+                in_array($email, $emails, true) ||
+                in_array($phone, $phones, true) ||
+                in_array($ni, $nis, true)
             ) {
                 return back()->withErrors([
                     'csv_file' => "Duplicate Email / Phone / NI found in CSV at row {$rowNumber}"
@@ -187,12 +155,9 @@ class WorkerImportController extends Controller
             $phones[] = $phone;
             $nis[]    = $ni;
 
-            /** ---------------------------------
-             *  PREPARE INSERT DATA
-             * --------------------------------*/
+            /* -------- Prepare insert -------- */
             $rows[] = [
                 'agency_id'     => $request->agency_id,
-
                 'surname'       => trim($data[0] ?? ''),
                 'forename'      => $forename,
                 'title'         => $data[2] ?? null,
@@ -235,24 +200,10 @@ class WorkerImportController extends Controller
 
         fclose($file);
 
-        /** ---------------------------------
-         *  DATABASE DUPLICATE CHECK
-         * --------------------------------*/
-        $exists = Worker::where(function ($q) use ($emails) {
-            if (!empty($emails)) {
-                $q->whereIn('email', $emails);
-            }
-        })
-            ->orWhere(function ($q) use ($phones) {
-                if (!empty($phones)) {
-                    $q->whereIn('mobile_phone', $phones);
-                }
-            })
-            ->orWhere(function ($q) use ($nis) {
-                if (!empty($nis)) {
-                    $q->whereIn('ni_number', $nis);
-                }
-            })
+        /* -------- Database duplicate check -------- */
+        $exists = Worker::whereIn('email', $emails)
+            ->orWhereIn('mobile_phone', $phones)
+            ->orWhereIn('ni_number', $nis)
             ->exists();
 
         if ($exists) {
@@ -261,14 +212,11 @@ class WorkerImportController extends Controller
             ]);
         }
 
-        /** ---------------------------------
-         *  INSERT USING TRANSACTION
-         * --------------------------------*/
-        DB::transaction(function () use ($rows) {
-            Worker::insert($rows);
-        });
+        DB::transaction(fn() => Worker::insert($rows));
 
-        return back()->with('success', 'Workers imported successfully');
+        return redirect()
+            ->route('workers.index')
+            ->with('success', 'Workers imported successfully');
     }
 
     /**
@@ -282,87 +230,100 @@ class WorkerImportController extends Controller
     /**
      * Date parser
      */
-    private function parseDate($value)
+    private function parseDate($value): ?string
     {
         if (!$value) {
             return null;
         }
 
         try {
-            return Carbon::createFromFormat('d/m/Y', trim($value))
-                ->format('Y-m-d');
-        } catch (\Exception $e) {
+            return Carbon::createFromFormat('d/m/Y', trim($value))->format('Y-m-d');
+        } catch (\Exception) {
             return null;
         }
     }
 
+    /**
+     * List workers
+     */
     public function index()
     {
         $workers = Worker::with('agency')
-            ->orderBy('created_at', 'desc')
+            ->orderByDesc('created_at')
             ->paginate(15);
 
         return view('workers.index', compact('workers'));
     }
 
+    /**
+     * Edit worker
+     */
     public function edit(Worker $worker)
     {
         $agencies = Agency::orderBy('name')->get();
-
         return view('workers.edit', compact('worker', 'agencies'));
     }
 
-    public function update(Request $request, Worker $worker)
-    {
-        $mobile = $request->mobile_phone;
-        $home   = $request->home_phone;
-
-        if (!ctype_digit($mobile)) {
-            return back()->withErrors([
-                'mobile_phone' => 'Mobile phone must contain only numbers'
-            ])
-                ->withInput();
-        }
-
-        if (strlen($mobile) > 20) {
-            return back()->withErrors([
-                'mobile_phone' => 'Mobile phone must be between 1 and 20 digits'
-            ])
-                ->withInput();
-        }
-
-        if ($home !== null && $home !== '') {
-
-            if (!ctype_digit($home)) {
-                return back()->withErrors([
-                    'home_phone' => 'Home phone must contain only numbers'
-                ])
-                    ->withInput();
-            }
-
-            if (strlen($home) > 20) {
-                return back()->withErrors([
-                    'home_phone' => 'Home phone must be between 1 and 20 digits'
-                ])
-                    ->withInput();
-            }
-        }
-
-        $request->validate([
-            'forename'      => 'required',
-            'mobile_phone'  => 'required|unique:workers,mobile_phone,' . $worker->id,
-            'email'         => 'required|email|unique:workers,email,' . $worker->id,
-            'ni_number'     => 'required|unique:workers,ni_number,' . $worker->id,
-            'agency_id'     => 'required|exists:agencies,id',
-        ]);
-
-        $worker->update($request->all());
-
-        return redirect()
-            ->route('workers.index')
-            ->with('success', 'Worker updated successfully');
+    /**
+     * Update worker
+     */
+public function update(Request $request, Worker $worker)
+{
+    // First, check that mobile_phone is provided
+    if (!$request->filled('mobile_phone')) {
+        return back()->withErrors([
+            'mobile_phone' => 'Mobile phone is required'
+        ])->withInput();
     }
 
+    $mobile = $request->mobile_phone;
+    $home   = $request->home_phone;
+
+    // Then validate digits and max length
+    if (!ctype_digit($mobile) || strlen($mobile) > 20) {
+        return back()->withErrors([
+            'mobile_phone' => 'Mobile phone must contain only digits and max 20 digits'
+        ])->withInput();
+    }
+
+    if ($home && (!ctype_digit($home) || strlen($home) > 20)) {
+        return back()->withErrors([
+            'home_phone' => 'Home phone must contain only digits and max 20 digits'
+        ])->withInput();
+    }
+
+    // Then validate other fields
+    $request->validate([
+        'forename' => ['required'],
+        'agency_id' => ['required', 'exists:agencies,id'],
+
+        'email' => [
+            'required',
+            'regex:/^[^@\s]+@[^@\s]+\.[^@\s]+$/',
+            'unique:workers,email,' . $worker->id,
+        ],
+
+        'mobile_phone' => [
+            'unique:workers,mobile_phone,' . $worker->id,
+        ],
+
+        'ni_number' => [
+            'required',
+            'unique:workers,ni_number,' . $worker->id,
+        ],
+    ]);
+
+    $worker->update($request->all());
+
+    return redirect()
+        ->route('workers.index')
+        ->with('success', 'Worker updated successfully');
+}
+
+
+    /**
+     * Delete worker
+     */
     public function destroy(Worker $worker)
     {
         $worker->delete();
