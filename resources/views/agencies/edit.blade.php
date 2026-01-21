@@ -159,7 +159,7 @@
                     type="text"
                     name="subdomain"
                     value="{{ old('subdomain', $agency->subdomain) }}"
-                    placeholder="example: acme">
+                    placeholder="example: myagency.com">
 
                 @error('subdomain')
                 <div class="error">{{ $message }}</div>

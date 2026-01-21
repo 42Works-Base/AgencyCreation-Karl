@@ -69,6 +69,36 @@
             display: flex;
             gap: 8px;
         }
+
+        .flash-message {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 14px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+            transition: opacity 0.4s ease;
+        }
+
+        .flash-message.success {
+            background-color: #e6fffa;
+            color: #065f46;
+            border: 1px solid #b2f5ea;
+        }
+
+        .flash-close {
+            background: transparent;
+            border: none;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            color: inherit;
+            line-height: 1;
+        }
+
+        .flash-close:hover {
+            opacity: 0.7;
+        }
     </style>
 </head>
 
@@ -116,10 +146,12 @@
 
 
     @if (session('success'))
-    <div class="flash-success">
-        {{ session('success') }}
+    <div class="flash-message success">
+        <span>{{ session('success') }}</span>
+        <button class="flash-close" onclick="closeFlash(this)">×</button>
     </div>
     @endif
+
 
     <table>
         <thead>
@@ -172,6 +204,23 @@
     <br>
 
     {{ $workers->links() }}
+
+    <script>
+        function closeFlash(button) {
+            const flash = button.parentElement;
+            flash.style.opacity = '0';
+            setTimeout(() => flash.remove(), 400);
+        }
+
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+            document.querySelectorAll('.flash-message').forEach(flash => {
+                flash.style.opacity = '0';
+                setTimeout(() => flash.remove(), 400);
+            });
+        }, 5000);
+    </script>
+
 
 </body>
 

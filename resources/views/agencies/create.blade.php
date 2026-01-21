@@ -190,7 +190,7 @@
                     name="subdomain"
                     type="text"
                     value="{{ old('subdomain') }}"
-                    placeholder="example: acme">
+                    placeholder="example: myagency.com">
                 <!-- <small>Only the subdomain part (no protocol).</small> -->
     
                 @error('subdomain')
