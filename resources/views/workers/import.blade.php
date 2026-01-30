@@ -140,8 +140,11 @@
                 <input type="file" name="csv_file" accept=".csv,.txt">
 
                 @error('csv_file')
-                <div class="error-text">{{ $message }}</div>
+                <div class="error-text" style="white-space: pre-line;">
+                    {{ $message }}
+                </div>
                 @enderror
+
             </div>
 
             <button type="submit" class="btn">Import</button>
